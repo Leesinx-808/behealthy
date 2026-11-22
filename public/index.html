@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#10b981" />
+  <title>NutriMate · 专属健康与增重助手</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f8fafc; }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+  </style>
+</head>
+<body class="text-slate-800 antialiased pb-28">
+
+  <!-- 1. 登录 / 注册界面 -->
+  <div id="authView" class="min-h-screen flex flex-col justify-center px-6 max-w-md mx-auto">
+    <div class="bg-white rounded-3xl shadow-sm border border-slate-100 p-7">
+      <div class="w-12 h-12 rounded-2xl bg-emerald-500 text-white flex items-center justify-center text-2xl font-bold mb-4">🥗</div>
+      <h1 class="text-2xl font-bold text-slate-900">NutriMate</h1>
+      <p class="text-sm text-slate-500 mt-1 mb-6">私人定制饮食与运动追踪 · 账号数据完全独立隔离</p>
+
+      <div class="space-y-4">
+        <div>
+          <label class="block text-xs font-medium text-slate-600 mb-1">邮箱 Email</label>
+          <input id="authEmail" type="email" placeholder="your@email.com" class="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-emerald-500" />
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-slate-600 mb-1">密码 Password (至少6位)</label>
+          <input id="authPassword" type="password" placeholder="••••••" class="w-full px-4 py-3 rounded-xl border border-slate-200 text-sm focus:outline-none focus:border-emerald-500" />
+        </div>
+        <p id="authError" class="text-xs text-rose-500 hidden"></p>
+        <div class="pt-2 flex gap-3">
+          <button onclick="handleAuth('login')" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-3 rounded-xl text-sm transition">登录</button>
+          <button onclick="handleAuth('signup')" class="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-700 font-medium py-3 rounded-xl text-sm transition">新用户注册</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. 主界面 (仅登录后可见，完全属于当前用户) -->
+  <div id="appView" class="hidden max-w-md mx-auto">
+    <!-- 顶部栏 -->
+    <header class="sticky top-0 z-20 bg-white/90 backdrop-blur border-b border-slate-100 px-4 py-3 flex items-center justify-between">
+      <div>
+        <div class="flex items-center gap-2">
+          <span id="headerName" class="font-bold text-base text-slate-900">我的健康面板</span>
+          <span id="goalBadge" class="text-[11px] px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-medium">增重模式</span>
+        </div>
+        <p id="todayDateText" class="text-xs text-slate-400 mt-0.5"></p>
+      </div>
+      <div class="flex items-center gap-2">
+        <button onclick="toggleBudgetMode()" id="budgetBtn" class="text-xs px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-600">💰 省钱模式: 关</button>
+        <button onclick="openProfileModal()" class="text-xs px-2.5 py-1.5 rounded-lg bg-slate-900 text-white font-medium">档案/口味</button>
+      </div>
+    </header>
+
+    <main class="p-4 space-y-4">
+      <!-- 今日进度仪表盘 -->
+      <section class="bg-white rounded-2xl p-4 shadow-sm border border-slate-100">
+        <div class="flex justify-between items-end mb-2">
+          <div>
+            <span class="text-xs text-slate-400">今日净热量 (摄入 - 运动)</span>
+            <div class="flex items-baseline gap-1.5 mt-0.5">
+              <span id="netCalText" class="text-2xl font-bold text-slate-900">0</span>
+              <span id="targetCalText" class="text-xs text-slate-400">/ 2450 kcal</span>
+            </div>
+          </div>
+          <span id="remainCalBadge" class="text-xs font-medium px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700">还差 2450 kcal</span>
+        </div>
+        <div class="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden mb-4">
+          <div id="calProgressBar" class="h-full bg-emerald-500 rounded-full transition-all duration-500" style="width: 0%"></div>
+        </div>
+
+        <div class="grid grid-cols-3 gap-2 pt-2 border-t border-slate-50 text-center">
+          <div class="bg-slate-50 rounded-xl p-2">
+            <div class="text-[11px] text-slate-400">蛋白质</div>
+            <div id="proteinText" class="text-sm font-bold text-slate-800 mt-0.5">0 / 95g</div>
+          </div>
+          <div class="bg-slate-50 rounded-xl p-2">
+            <div class="text-[11px] text-slate-400">碳水</div>
+            <div id="carbsText" class="text-sm font-bold text-slate-800 mt-0.5">0 / 300g</div>
+          </div>
+          <div class="bg-slate-50 rounded-xl p-2">
+            <div class="text-[11px] text-slate-400">脂肪</div>
+            <div id="fatText" class="text-sm font-bold text-slate-800 mt-0.5">0 / 75g</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- AI 军师动态建议卡片 -->
+      <section id="coachCard" class="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-2xl p-4 border border-emerald-100">
+        <div class="flex items-center gap-1.5 text-xs font-semibold text-emerald-800 mb-1">
+          <span>✨ 私人军师动态建议</span>
+        </div>
+        <p id="coachReplyText" class="text-xs text-emerald-900/90 leading-relaxed">
+          今天还没开始记录哦！拍下你的第一顿饭，或者点下方快捷按钮一键记账，我来帮你盯着今天的热量与蛋白质进度。
+        </p>
+      </section>
+
+      <!-- 一键常吃快捷栏 -->
+      <section>
+        <div class="flex items-center justify-between mb-2">
+          <span class="text-xs font-semibold text-slate-600">⚡ 一键常吃/常做快捷记账</span>
+          <button onclick="addCustomPreset()" class="text-[11px] text-emerald-600 font-medium">+ 添加快捷项</button>
+        </div>
+        <div id="presetList" class="flex gap-2 overflow-x-auto no-scrollbar pb-1"></div>
+      </section>
+
+      <!-- 今日记录流 -->
+      <section>
+        <h2 class="text-xs font-semibold text-slate-600 mb-2">📋 今日饮食与运动记录</h2>
+        <div id="logsContainer" class="space-y-2.5"></div>
+      </section>
+    </main>
+
+    <!-- 底部悬浮输入框 -->
+    <div class="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-100 p-3 z-20">
+      <div class="max-w-md mx-auto">
+        <div id="imagePreviewBox" class="hidden mb-2 flex items-center justify-between bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200">
+          <div class="flex items-center gap-2">
+            <img id="previewThumb" class="w-9 h-9 rounded-lg object-cover" />
+            <span id="compressInfo" class="text-[11px] text-emerald-600 font-medium">已自动压缩至轻量模式 (不占存储)</span>
+          </div>
+          <button onclick="clearSelectedImage()" class="text-xs text-slate-400 px-2">✕</button>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <label class="cursor-pointer w-10 h-10 rounded-xl bg-slate-100 hover:bg-slate-200 flex items-center justify-center text-lg shrink-0">
+            📷
+            <input id="photoInput" type="file" accept="image/*" class="hidden" onchange="handleImageUpload(event)" />
+          </label>
+          <input id="logInput" type="text" placeholder="写吃了什么/运动了什么，或传照片..." class="flex-1 bg-slate-100 rounded-xl px-3.5 py-2.5 text-sm focus:outline-none focus:bg-white focus:ring-2 focus:ring-emerald-500" />
+          <button id="sendBtn" onclick="submitLog()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl text-sm font-medium shrink-0">记录</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. 个人档案与口味问卷弹窗 -->
+  <div id="profileModal" class="hidden fixed inset-0 bg-black/50 z-30 flex items-end sm:items-center justify-center p-4">
+    <div class="bg-white rounded-3xl w-full max-w-md max-h-[88vh] overflow-y-auto p-5 space-y-4">
+      <div class="flex justify-between items-center border-b border-slate-100 pb-3">
+        <h3 class="font-bold text-base">个人档案与口味偏好</h3>
+        <button onclick="closeProfileModal()" class="text-slate-400 text-sm">关闭</button>
+      </div>
+
+      <div class="grid grid-cols-2 gap-3 text-xs">
+        <div>
+          <label class="text-slate-500">昵称</label>
+          <input id="pName" type="text" class="w-full mt-1 px-3 py-2 border rounded-xl" />
+        </div>
+        <div>
+          <label class="text-slate-500">目标方向</label>
+          <select id="pGoal" class="w-full mt-1 px-3 py-2 border rounded-xl bg-white">
+            <option value="gain">增重增肌 (+盈余)</option>
+            <option value="maintain">维持体态 (平衡)</option>
+            <option value="lose">健康减脂 (-缺口)</option>
+          </select>
+        </div>
+        <div>
+          <label class="text-slate-500">身高 (cm)</label>
+          <input id="pHeight" type="number" class="w-full mt-1 px-3 py-2 border rounded-xl" />
+        </div>
+        <div>
+          <label class="text-slate-500">当前体重 (kg)</label>
+          <input id="pWeight" type="number" step="0.1" class="w-full mt-1 px-3 py-2 border rounded-xl" />
+        </div>
+        <div>
+          <label class="text-slate-500">每日目标热量 (kcal)</label>
+          <input id="pCal" type="number" class="w-full mt-1 px-3 py-2 border rounded-xl" />
+        </div>
+        <div>
+          <label class="text-slate-500">每日目标蛋白质 (g)</label>
+          <input id="pPro" type="number" class="w-full mt-1 px-3 py-2 border rounded-xl" />
+        </div>
+      </div>
+
+      <div class="text-xs space-y-3">
+        <div>
+          <label class="text-slate-500">喜欢的食物 (AI 会优先推荐)</label>
+          <input id="pPref" type="text" placeholder="例如：全脂牛奶、William梨、美禄苏打饼、杂饭" class="w-full mt-1 px-3 py-2 border rounded-xl" />
+        </div>
+        <div>
+          <label class="text-slate-500">忌口与雷区 (AI 会自动扣除/避开)</label>
+          <input id="pDislike" type="text" placeholder="例如：不吃蒸鸡皮、不吃红枣蘑菇、汉堡不放酱" class="w-full mt-1 px-3 py-2 border rounded-xl" />
+        </div>
+      </div>
+
+      <div class="pt-2 flex gap-2">
+        <button onclick="saveProfile()" class="flex-1 bg-emerald-600 text-white py-2.5 rounded-xl text-sm font-medium">保存档案</button>
+        <button onclick="logout()" class="px-4 py-2.5 rounded-xl bg-rose-50 text-rose-600 text-sm font-medium">退出登录</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let supabaseClient = null;
+    let currentUser = null;
+    let userProfile = null;
+    let todayLogs = [];
+    let compressedBase64 = null;
+    let budgetMode = false;
+
+    const defaultPresets = [
+      { title: '全脂牛奶 250ml', log_type: 'meal', calories: 155, protein: 8.5, carbs: 11.5, fat: 8.5 },
+      { title: '美禄 + 5片苏打饼', log_type: 'meal', calories: 350, protein: 7, carbs: 54, fat: 12 },
+      { title: 'William 梨 1颗', log_type: 'meal', calories: 110, protein: 0.5, carbs: 28, fat: 0 },
+      { title: '水煮蛋 2颗', log_type: 'meal', calories: 150, protein: 13, carbs: 1, fat: 10 }
+    ];
+
+    window.onload = async () => {
+      document.getElementById('todayDateText').innerText = new Date().toLocaleDateString('zh-CN', { month: 'long', day: 'numeric', weekday: 'long' });
+      const cfgRes = await fetch('/api/config');
+      const cfg = await cfgRes.json();
+      supabaseClient = window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseKey);
+
+      const { data: { session } } = await supabaseClient.auth.getSession();
+      if (session) {
+        currentUser = session.user;
+        await initApp();
+      }
+    };
+
+    async function handleAuth(type) {
+      const email = document.getElementById('authEmail').value.trim();
+      const password = document.getElementById('authPassword').value.trim();
+      const errEl = document.getElementById('authError');
+      errEl.classList.add('hidden');
+
+      if (!email || password.length < 6) {
+        errEl.innerText = '请输入有效邮箱和至少6位密码';
+        errEl.classList.remove('hidden');
+        return;
+      }
+
+      const res = type === 'login'
+        ? await supabaseClient.auth.signInWithPassword({ email, password })
+        : await supabaseClient.auth.signUp({ email, password });
+
+      if (res.error) {
+        errEl.innerText = res.error.message;
+        errEl.classList.remove('hidden');
+      } else if (res.data.user) {
+        currentUser = res.data.user;
+        await initApp();
+      }
+    }
+
+    async function logout() {
+      await supabaseClient.auth.signOut();
+      location.reload();
+    }
+
+    async function initApp() {
+      document.getElementById('authView').classList.add('hidden');
+      document.getElementById('appView').classList.remove('hidden');
+
+      let { data: profile } = await supabaseClient.from('profiles').select('*').eq('id', currentUser.id).single();
+      if (!profile) {
+        const newProfile = {
+          id: currentUser.id,
+          display_name: currentUser.email.split('@')[0],
+          quick_presets: defaultPresets
+        };
+        const { data } = await supabaseClient.from('profiles').insert(newProfile).select().single();
+        profile = data;
+        openProfileModal(); // 首次注册自动弹出建档问卷
+      }
+      userProfile = profile;
+      renderProfileUI();
+      await loadTodayLogs();
+    }
+
+    function renderProfileUI() {
+      document.getElementById('headerName').innerText = userProfile.display_name || '我的面板';
+      const goalMap = { gain: '增重增肌模式', maintain: '维持体态模式', lose: '健康减脂模式' };
+      document.getElementById('goalBadge').innerText = goalMap[userProfile.goal_type] || '定制模式';
+
+      const presets = (userProfile.quick_presets && userProfile.quick_presets.length) ? userProfile.quick_presets : defaultPresets;
+      const presetHtml = presets.map((p, idx) => `
+        <button onclick="quickLogPreset(${idx})" class="shrink-0 bg-white border border-slate-200 hover:border-emerald-400 px-3 py-2 rounded-xl text-left transition">
+          <div class="text-xs font-medium text-slate-800">${p.title}</div>
+          <div class="text-[10px] text-slate-400 mt-0.5">${p.calories} kcal · ${p.protein}g 蛋白</div>
+        </button>
+      `).join('');
+      document.getElementById('presetList').innerHTML = presetHtml;
+    }
+
+    async function loadTodayLogs() {
+      const todayStr = new Date().toISOString().split('T')[0];
+      const { data } = await supabaseClient
+        .from('daily_logs')
+        .select('*')
+        .eq('user_id', currentUser.id)
+        .eq('log_date', todayStr)
+        .order('created_at', { ascending: false });
+
+      todayLogs = data || [];
+      updateDashboard();
+    }
+
+    function updateDashboard() {
+      let inCal = 0, outCal = 0, pro = 0, carbs = 0, fat = 0;
+      todayLogs.forEach(item => {
+        if (item.log_type === 'workout') {
+          outCal += Number(item.calories || 0);
+        } else {
+          inCal += Number(item.calories || 0);
+          pro += Number(item.protein || 0);
+          carbs += Number(item.carbs || 0);
+          fat += Number(item.fat || 0);
+        }
+      });
+
+      const netCal = Math.max(0, inCal - outCal);
+      const targetCal = userProfile.target_calories || 2450;
+      const remain = targetCal - netCal;
+      const pct = Math.min(100, Math.round((netCal / targetCal) * 100));
+
+      document.getElementById('netCalText').innerText = netCal;
+      document.getElementById('targetCalText').innerText = `/ ${targetCal} kcal`;
+      document.getElementById('calProgressBar').style.width = `${pct}%`;
+
+      const badge = document.getElementById('remainCalBadge');
+      if (remain > 0) {
+        badge.innerText = `还差 ${remain} kcal`;
+        badge.className = 'text-xs font-medium px-2.5 py-1 rounded-lg bg-amber-50 text-amber-700';
+      } else {
+        badge.innerText = `已超额达成 +${Math.abs(remain)} kcal 🎉`;
+        badge.className = 'text-xs font-medium px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-800';
+      }
+
+      document.getElementById('proteinText').innerText = `${Math.round(pro)} / ${userProfile.target_protein}g`;
+      document.getElementById('carbsText').innerText = `${Math.round(carbs)} / ${userProfile.target_carbs}g`;
+      document.getElementById('fatText').innerText = `${Math.round(fat)} / ${userProfile.target_fat}g`;
+
+      const logsHtml = todayLogs.length === 0
+        ? `<div class="text-center py-8 text-xs text-slate-400 bg-white rounded-2xl border border-dashed border-slate-200">今天还没有记录，拍照或输入你的第一餐吧</div>`
+        : todayLogs.map(log => `
+          <div class="bg-white p-3.5 rounded-2xl border border-slate-100 flex items-center justify-between">
+            <div>
+              <div class="flex items-center gap-1.5">
+                <span class="text-sm">${log.log_type === 'workout' ? '🏃' : '🍽️'}</span>
+                <span class="text-sm font-semibold text-slate-800">${log.title}</span>
+              </div>
+              <div class="text-[11px] text-slate-400 mt-1">
+                ${log.log_type === 'workout'
+                  ? `运动消耗 -${log.calories} kcal`
+                  : `+${log.calories} kcal · 蛋白 ${log.protein}g · 碳水 ${log.carbs}g · 脂肪 ${log.fat}g`}
+              </div>
+            </div>
+            <button onclick="deleteLog('${log.id}')" class="text-xs text-slate-300 hover:text-rose-500 px-2 py-1">删除</button>
+          </div>
+        `).join('');
+      document.getElementById('logsContainer').innerHTML = logsHtml;
+    }
+
+    // 前端自动压缩图片至 800px 轻量 JPEG，彻底不占云端空间
+    function handleImageUpload(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const maxW = 800;
+          const scale = img.width > maxW ? maxW / img.width : 1;
+          canvas.width = img.width * scale;
+          canvas.height = img.height * scale;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          compressedBase64 = canvas.toDataURL('image/jpeg', 0.72);
+          document.getElementById('previewThumb').src = compressedBase64;
+          document.getElementById('imagePreviewBox').classList.remove('hidden');
+        };
+        img.src = e.target.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function clearSelectedImage() {
+      compressedBase64 = null;
+      document.getElementById('photoInput').value = '';
+      document.getElementById('imagePreviewBox').classList.add('hidden');
+    }
+
+    async function submitLog() {
+      const text = document.getElementById('logInput').value.trim();
+      if (!text && !compressedBase64) return;
+
+      const btn = document.getElementById('sendBtn');
+      btn.disabled = true;
+      btn.innerText = '识别中...';
+
+      try {
+        let inCal = 0, outCal = 0, pro = 0;
+        todayLogs.forEach(i => i.log_type === 'workout' ? outCal += i.calories : (inCal += i.calories, pro += i.protein));
+
+        const res = await fetch('/api/analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            text,
+            imageBase64: compressedBase64,
+            profile: userProfile,
+            todaySummary: { inCalories: inCal, outCalories: outCal, protein: pro },
+            budgetMode
+          })
+        });
+        const aiData = await res.json();
+        if (aiData.error) throw new Error(aiData.error);
+
+        const todayStr = new Date().toISOString().split('T')[0];
+        await supabaseClient.from('daily_logs').insert({
+          user_id: currentUser.id,
+          log_date: todayStr,
+          log_type: aiData.log_type || 'meal',
+          title: aiData.title,
+          calories: aiData.calories,
+          protein: aiData.protein || 0,
+          carbs: aiData.carbs || 0,
+          fat: aiData.fat || 0
+        });
+
+        document.getElementById('coachReplyText').innerText = aiData.coach_reply;
+        document.getElementById('logInput').value = '';
+        clearSelectedImage();
+        await loadTodayLogs();
+      } catch (err) {
+        alert('识别遇到一点小问题：' + err.message);
+      } finally {
+        btn.disabled = false;
+        btn.innerText = '记录';
+      }
+    }
+
+    async function quickLogPreset(idx) {
+      const presets = (userProfile.quick_presets && userProfile.quick_presets.length) ? userProfile.quick_presets : defaultPresets;
+      const item = presets[idx];
+      const todayStr = new Date().toISOString().split('T')[0];
+      await supabaseClient.from('daily_logs').insert({
+        user_id: currentUser.id,
+        log_date: todayStr,
+        log_type: item.log_type || 'meal',
+        title: item.title,
+        calories: item.calories,
+        protein: item.protein,
+        carbs: item.carbs,
+        fat: item.fat
+      });
+      document.getElementById('coachReplyText').innerText = `已一键记入「${item.title}」（+${item.calories} kcal，+${item.protein}g 蛋白），继续保持这个节奏！`;
+      await loadTodayLogs();
+    }
+
+    async function deleteLog(id) {
+      await supabaseClient.from('daily_logs').delete().eq('id', id);
+      await loadTodayLogs();
+    }
+
+    function toggleBudgetMode() {
+      budgetMode = !budgetMode;
+      const btn = document.getElementById('budgetBtn');
+      btn.innerText = budgetMode ? '💰 省钱模式: 开' : '💰 省钱模式: 关';
+      btn.className = budgetMode
+        ? 'text-xs px-2.5 py-1.5 rounded-lg bg-amber-100 text-amber-800 font-medium'
+        : 'text-xs px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-600';
+    }
+
+    function openProfileModal() {
+      document.getElementById('pName').value = userProfile.display_name || '';
+      document.getElementById('pGoal').value = userProfile.goal_type || 'gain';
+      document.getElementById('pHeight').value = userProfile.height_cm || 175;
+      document.getElementById('pWeight').value = userProfile.weight_kg || 55;
+      document.getElementById('pCal').value = userProfile.target_calories || 2450;
+      document.getElementById('pPro').value = userProfile.target_protein || 95;
+      document.getElementById('pPref').value = userProfile.preferences || '';
+      document.getElementById('pDislike').value = userProfile.dislikes || '';
+      document.getElementById('profileModal').classList.remove('hidden');
+    }
+
+    function closeProfileModal() {
+      document.getElementById('profileModal').classList.add('hidden');
+    }
+
+    async function saveProfile() {
+      const updates = {
+        display_name: document.getElementById('pName').value.trim(),
+        goal_type: document.getElementById('pGoal').value,
+        height_cm: Number(document.getElementById('pHeight').value),
+        weight_kg: Number(document.getElementById('pWeight').value),
+        target_calories: Number(document.getElementById('pCal').value),
+        target_protein: Number(document.getElementById('pPro').value),
+        preferences: document.getElementById('pPref').value.trim(),
+        dislikes: document.getElementById('pDislike').value.trim()
+      };
+      const { data } = await supabaseClient.from('profiles').update(updates).eq('id', currentUser.id).select().single();
+      userProfile = data;
+      renderProfileUI();
+      updateDashboard();
+      closeProfileModal();
+    }
+
+    async function addCustomPreset() {
+      const title = prompt('快捷餐食名称（例如：Nasi Kandar 炸鸡饭）：');
+      if (!title) return;
+      const calories = Number(prompt('预估热量 kcal（例如：900）：') || 0);
+      const protein = Number(prompt('预估蛋白质 g（例如：40）：') || 0);
+      const currentPresets = (userProfile.quick_presets && userProfile.quick_presets.length) ? [...userProfile.quick_presets] : [...defaultPresets];
+      currentPresets.push({ title, log_type: 'meal', calories, protein, carbs: 0, fat: 0 });
+      const { data } = await supabaseClient.from('profiles').update({ quick_presets: currentPresets }).eq('id', currentUser.id).select().single();
+      userProfile = data;
+      renderProfileUI();
+    }
+  </script>
+</body>
+</html>
